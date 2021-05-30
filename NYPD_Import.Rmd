@@ -1,0 +1,201 @@
+---
+title: "NYPD_Data_Historic"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r load_packages, echo=TRUE}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+```
+
+
+### Introduction
+
+This rmd document describes the data set being imported and the reproducible steps applied to import it into R.
+
+### Dataset & questions to answer
+
+The dataset consists of a list of all shooting incidents in New York City going back to 2006 until the end of 2019. Each record in the list represents a shooting incident and additional data on the event including suspect and victim demographics, location time and more. This data is manually reported and extracted every quarter and reviewed before being published on the NYPD website.
+We will analyze the data to identify any contributing factors based on patterns in these shooting incidents
+
+
+### Importing data
+
+There are multiple methods to importing this dataset. If you are using R studio,download the files to your computer locally and then use the **Import Dataset" UI option in the **Environment** panel. You can also use the below command to import data from a local file on your computer (file path is relative):
+
+```{r, dataset_import_csv, echo=TRUE}
+# dataset <- read.csv("~/./NYPD_Shooting_Incident_Data__Historic_.csv")
+```
+You can also use the url to the file in the **Import Dataset" UI option or use the below command to read data from the url into your workspace:
+
+```{r, dataset_import_url, echo=TRUE}
+library(readr)
+dataset <- read_csv("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD")
+```
+
+The data directory also contains additional file formats of the dataset like JSON, RDF and XML if preference is to work with these.
+
+### Cleaning the dataset
+
+To start, we will remove columns we will not need for the analysis, **(INCIDENT_KEY, JURISDICTION_CODE, STATISTICAL_MURDER_FLAG, X_COORD_CD, Y_COORD_CD, Lotitude, Longitude, Lon_Lat)**
+
+``` {r remove_columns, echo = TRUE}
+nypd_data <- dataset %>%
+  select(OCCUR_DATE, OCCUR_TIME, BORO, PRECINCT, LOCATION_DESC, PERP_AGE_GROUP, PERP_SEX, PERP_RACE, VIC_AGE_GROUP, VIC_SEX, VIC_RACE)
+```
+
+Next, we will rename some of the columns in this data set
+
+```{r rename_columns, echo=TRUE}
+nypd_data <- nypd_data %>%
+  rename(DATE = OCCUR_DATE, TIME = OCCUR_TIME, LOCATION = LOCATION_DESC)
+
+summary(nypd_data)
+```
+
+### Transformation, Analysis & Visualization
+
+We will start transforming data for analysis by creating  slices of smaller datasets
+
+```{r transform_occurrence, echo=TRUE}
+data_occurrence <- nypd_data %>%select(DATE, TIME, BORO)
+```
+
+```{r arrange_occurrence, echo=TRUE}
+data_occurrence<- data_occurrence %>% arrange(DATE)
+```
+
+```{r analyze_occurrence, echo=TRUE}
+analyze_occurrence <- data_occurrence %>%
+  group_by(DATE) %>%
+  count(DATE)
+
+summary(analyze_occurrence)
+```
+
+```{r transform_data_BORO, echo=TRUE}
+data_boro <- data_occurrence %>%
+  select(DATE, BORO) %>%
+  count(BORO) %>%
+  rename(SHOOTOUTS = n)
+```
+
+```{r arrange_data_boro, echo=TRUE}
+data_boro <- data_boro %>%
+  arrange(desc(SHOOTOUTS))
+analyze_boro <- data_boro
+summary(analyze_boro)
+```
+```{r boro_visualization, echo=TRUE}
+ggplot(analyze_boro, aes(x=BORO, y = SHOOTOUTS, color = BORO)) + geom_col()
+```
+
+
+```{r transform_data_location, echo=TRUE}
+data_location <- nypd_data %>%
+  count(LOCATION)
+```
+
+```{r arrange_data_location, echo=TRUE}
+data_location <- data_location %>%
+  rename(SHOOTOUTS = n) %>%
+  arrange(desc(SHOOTOUTS))
+
+analyze_location <- data_location
+
+summary(analyze_location)
+```
+```{r location_visualization, echo=TRUE}
+ggplot(analyze_location, aes(x = SHOOTOUTS, y = LOCATION, color = SHOOTOUTS)) + geom_point() + scale_x_log10()
+```
+
+```{r data_transform_race, echo=TRUE}
+data_race <- nypd_data %>%
+  select(DATE, PERP_RACE) %>%
+  count(PERP_RACE)
+```
+
+```{r arrange_data_race, echo=TRUE}
+data_race <- data_race %>%
+  rename(SHOOTOUTS = n) %>%
+  arrange(desc(SHOOTOUTS))
+
+analyze_perp_race <- data_race
+summary(analyze_perp_race)
+```
+```{r perp_race_visualization, echo=TRUE}
+ggplot(analyze_perp_race, aes(x = SHOOTOUTS, y = PERP_RACE, color = PERP_RACE)) + geom_point()
+```
+
+```{r data_perp_age, echo=TRUE}
+data_perp_age <- nypd_data %>%
+  select(DATE, PERP_AGE_GROUP) %>%
+  count(PERP_AGE_GROUP)
+```
+
+```{r arrange_perp_age, echo=TRUE}
+data_perp_age <- data_perp_age %>%
+  rename(SHOOTOUTS = n) %>%
+  arrange(desc(SHOOTOUTS))
+
+analyze_perp_age <- data_perp_age
+summary(analyze_perp_age)
+```
+
+```{r data_precinct, echo=TRUE}
+data_precinct <- nypd_data %>%
+  select(DATE, PRECINCT) %>%
+  count(PRECINCT) %>%
+  rename(SHOOTOUTS = n) %>%
+  arrange(desc(SHOOTOUTS))
+
+analyze_precinct <- data_precinct
+summary(data_precinct)
+```
+
+
+### Analysis Summary
+
+There is **no co-relation** between the dates of the shootouts to the event itself. I do not see a pattern of higher or lower occurrence of events based on the day/date.
+
+**69.5%** of the shootouts between 2006 and 2020 have happened in the boro's of **Brooklyn and Bronx**. If there was access to additional demographics data such as income and population, we could have analyzed this further. Why do most shootings happen in these boro's?
+
+The location has not been captured for ~45% of events. The next highest number of shootouts have happened at **public housing and apartment buildings** when we do not account for events in which the location was not captured.
+
+Analysis of the race of the perpetrator is inconclusive since ~43% of the events do not have a race captured.
+
+Analysis of the age of the perpetrator is inconclusive as well since ~35% of the events do not have the agene pf the perpetrator captured. If we do not account for these events, ~23% of the perpetrators are in the 18-24 age group and ~20% of the perpetrators are in the 25-44 age group.
+
+Analysis of precinct data is also inconclusive as it does not show a co-relation between the occurrence of shootings. Having precinct data mapped to the boro and income would have to be looked at to analyze this further.
+
+
+### Conclusion
+
+At the level of granularity we have been able to get to with this dataset and analysis, the only insight we can confidently put out is that there is a strong relationship with the boro's of Brooklyn, Bronx and the incidents of shootings. The influencing factors are not clear with this data set and there are questions that can be answered with additional demographics data. The one obvious and possible source of bias is the race of perpetrators. It'll be easy to assume that these events are perpetuated by people of a specific race.
+
+
+```{r session_info, echo=TRUE}
+sessionInfo()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
